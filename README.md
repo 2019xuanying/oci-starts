@@ -1,12 +1,13 @@
-# **🐢 Oracle Cloud ARM Sniper Web Panel**
+# **🐢 Oracle Cloud ARM Sniper Web Panel (Pro)**
 
 这是一个基于 Python Flask 的 Oracle Cloud (甲骨文云) 自动抢机脚本，集成了现代化的 Web 控制面板。它旨在帮助用户自动申请 Oracle Cloud 紧俏的 ARM 实例（如首尔、东京等区域）。
 
-与传统命令行脚本不同，本项目拥有**图形化界面**，支持**在线配置参数**、**实时日志监控**、**Telegram 通知**以及智能的**防封/退避算法**。
+与传统命令行脚本不同，本项目拥有**图形化界面**，支持 **main.tf 堆栈文件一键上传解析**、**在线配置参数**、**实时日志监控**、**Telegram 通知**以及智能的**防封/退避算法**。
 
 ## **✨ 主要功能**
 
 * **🖥️ Web 控制面板**：无需修改代码或配置文件，直接在浏览器中管理所有操作。  
+* **📦 main.tf 自动解析**：**\[新功能\]** 支持上传甲骨文堆栈文件 (main.tf)，自动提取子网 ID、镜像 ID、可用区等复杂参数，告别手动查找。  
 * **🔑 安全登录**：内置密码验证，防止未经授权的访问（默认密码可修改）。  
 * **📋 在线配置**：支持直接粘贴 API 私钥（Private Key）内容，无需上传密钥文件，更加安全便捷。  
 * **🛡️ 智能防封 (Anti-Ban)**：  
@@ -24,41 +25,64 @@
 
 pip install flask oci requests
 
-## **🚀 快速开始**
+## **🚀 快速使用指南**
 
-1. 启动脚本  
-   下载 oracle\_sniper\_web.py 到本地，在终端运行：  
-   python oracle\_sniper\_web.py
+### **第一步：启动面板**
 
-   *默认运行在 5000 端口。如果需要修改端口或默认密码（默认为 admin），请编辑脚本文件头部的全局配置区域。*  
-2. 访问面板  
-   打开浏览器访问：http://localhost:5000 (如果是服务器部署，请使用服务器 IP)。  
-3. 登录  
-   输入密码（默认：admin）进入控制台。  
-4. **填写配置**  
-   * **OCI Credentials**: 填入甲骨文 API 的 User OCID, Tenancy OCID, Region, Fingerprint。直接将 .pem 私钥的内容复制粘贴到 "Private Key" 框中。  
-   * **Instance Config**: 填入目标机器的参数（可用区 AD, 子网 ID, 镜像 ID, SSH 公钥等）。  
-   * **Telegram Bot** (可选): 填入 Bot Token 和 Chat ID 以启用通知。  
-5. 启动抢机  
-   点击 START SNIPER 按钮，观察右侧日志窗口。
+下载 oracle\_sniper\_web.py 到本地，在终端运行：
 
-## **⚙️ 参数获取指南**
+python oracle\_sniper\_web.py
 
-### **1\. 甲骨文 API 信息 (OCI Credentials)**
+* 默认运行在 5000 端口。  
+* 默认登录密码为 admin。（如需修改，请编辑脚本文件头部的 WEB\_PASSWORD 变量）
 
-登录 Oracle Cloud 控制台：
+打开浏览器访问：http://localhost:5000 (如果是服务器部署，请使用服务器 IP)。
 
-* 点击右上角头像 \-\> **My Profile** \-\> **API Keys** \-\> **Add API Key**。  
-* 下载私钥 (.pem 文件)，用记事本打开复制内容。  
-* 页面会显示 User OCID, Fingerprint, Tenancy OCID, Region 等信息。
+### **第二步：配置参数 (推荐极速方案)**
 
-### **2\. 实例配置 (Instance Config)**
+本脚本支持两种配置方式，强烈推荐使用 **main.tf 上传** 方式。
 
-推荐方法：
+#### **方式 A：⚡ 使用 main.tf 自动填充 (推荐)**
 
-1. 在甲骨文后台手动尝试创建一个实例（选择 ARM 4核 24G）。  
-2. 在浏览器按 F12 打开开发者工具，点击“创建”按钮。  
-3. 在 Network (网络) 选项卡中找到 instances 请求，查看 Payload/请求体，即可获取 image\_id, subnet\_id, availability\_domain 等精确参数。
+这是获取准确参数（如 Image ID 和 Subnet ID）最快的方法：
+
+1. **登录 Oracle Cloud 后台**。  
+2. 像往常一样尝试创建一个 ARM 实例：  
+   * 选择 **VM.Standard.A1.Flex** 形状。  
+   * 选择 CPU (4核) 和 内存 (24G)。  
+   * 选择系统镜像 (Ubuntu/Oracle Linux)。  
+   * **关键点**：在页面最底部的“创建”按钮旁边，点击 **Save as Stack (另存为堆栈)**。  
+3. 在堆栈详情页面，下载堆栈配置（通常是一个 Zip 包，解压后得到 main.tf 文件）。  
+4. 回到本脚本的 Web 面板：  
+   * 在中间的 **Instance Config** 区域，点击右上角的 **紫色按钮 "Upload main.tf"**。  
+   * 选择你的 main.tf 文件。  
+5. **见证奇迹**：网页会自动填好 Availability Domain, Subnet ID, Image ID, SSH Key, CPU/RAM 等所有信息！
+
+#### **方式 B：手动填写**
+
+如果你熟悉 OCI 参数，也可以直接手动填写所有输入框。
+
+### **第三步：填写 API 凭证 (OCI Credentials)**
+
+无论使用哪种方式配置实例，你都必须手动填写左侧的 API 认证信息：
+
+1. **User OCID** & **Tenancy OCID** & **Fingerprint** & **Region**：这些信息可以在甲骨文后台 "My Profile \-\> API Keys" 中查看。  
+2. **Private Key**：  
+   * 在网页上的 "Private Key (Content)" 文本框中，**直接粘贴** 你的 \*.pem 私钥文件的**全部文本内容**。  
+   * *注意：无需上传文件到服务器，直接粘贴文本即可，重启脚本后内存释放，更安全。*
+
+### **第四步：启动抢机**
+
+1. 检查所有参数无误后，点击底部的 **"SAVE CONFIGURATION"** 保存配置。  
+2. 点击右侧的 **START** 按钮。  
+3. 观察右侧 **Live Logs** 日志窗口，如果看到 "Capacity Error" 或 "429" 等日志滚动，说明脚本正在正常工作。
+
+## **⚙️ 高级策略说明**
+
+脚本内置了智能策略，无需人工干预：
+
+* **遇到 429 限流**：脚本会自动增加延迟（例如从 15s \-\> 22s \-\> 33s），直到恢复正常，防止账号被封。  
+* **遇到 500 容量不足**：脚本会保持设定的基础频率重试。如果连续 2000 次（可配置）都抢不到，会进入 **深度休眠 (Deep Sleep)** 模式（默认休眠 10 分钟），避免无效请求骚扰服务器。
 
 ## **⚠️ 免责声明**
 
