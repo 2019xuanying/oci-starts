@@ -4,6 +4,10 @@ Oracle Cloud ARM Sniper with Web Panel (Light Mode & Chinese)
 甲骨文云自动抢机脚本 - 白色主题中文版
 集成 Web 面板、main.tf 自动解析、自定义频率控制、日志监控。
 
+修复日志:
+- 修复 OCI SDK 报错: Signer.__init__() missing 1 required positional argument: 'private_key_file_location'
+- 修复 KeyError: 'display_name' (前端表单缺失导致配置丢失)
+
 依赖安装:
 pip3 install flask oci requests
 """
@@ -61,14 +65,14 @@ class SniperState:
                 "key_content": ""
             },
             "instance": {
+                "display_name": "Oracle-ARM-Server", # 默认实例名称
                 "availability_domain": "",
                 "subnet_id": "",
                 "image_id": "",
                 "ssh_key": "",
                 "ocpus": 4,
                 "memory_in_gbs": 24,
-                "disk_size": 50,
-                "display_name": "Oracle-ARM-Server"
+                "disk_size": 50
             },
             "strategy": {
                 "min_interval": 15,    # 基础请求间隔(秒)
@@ -144,6 +148,11 @@ class OracleSniper:
         self.state = state
         self.oci_config = state.config['oci']
         self.ins_config = state.config['instance']
+        
+        # 修复：防止 display_name 丢失导致的 KeyError
+        if 'display_name' not in self.ins_config or not self.ins_config['display_name']:
+            self.ins_config['display_name'] = "Oracle-ARM-Server"
+            
         self.tg_config = state.config['telegram']
         
         # 从配置中读取策略，如果不存在则使用默认值
@@ -167,10 +176,12 @@ class OracleSniper:
             for k, v in config_dict.items():
                 if not v: raise ValueError(f"缺少 OCI 配置项: {k}")
 
+            # 修复：显式传递 private_key_file_location=None 以兼容所有 OCI SDK 版本
             self.signer = oci.Signer(
                 tenancy=self.oci_config['tenancy'],
                 user=self.oci_config['user'],
                 fingerprint=self.oci_config['fingerprint'],
+                private_key_file_location=None, 
                 private_key_content=self.oci_config['key_content']
             )
             self.compute_client = ComputeClient(config=config_dict, signer=self.signer)
@@ -209,8 +220,11 @@ sudo reboot
         return "获取超时"
 
     def run(self):
+        # 确保 display_name 存在
+        target_name = self.ins_config.get('display_name', 'Oracle-ARM-Server')
+        
         log_msg(f"🚀 抢机任务已启动 (间隔: {self.base_delay}s)...", "INFO")
-        telegram_notify(f"脚本已启动\n目标: {self.ins_config['display_name']}\n间隔: {self.base_delay}秒", self.tg_config)
+        telegram_notify(f"脚本已启动\n目标: {target_name}\n间隔: {self.base_delay}秒", self.tg_config)
         
         user_data, root_pwd = self.generate_userdata()
         current_delay = self.base_delay
@@ -226,7 +240,7 @@ sudo reboot
             
             try:
                 launch_details = oci.core.models.LaunchInstanceDetails(
-                    display_name=self.ins_config['display_name'],
+                    display_name=target_name,
                     compartment_id=self.oci_config['tenancy'],
                     shape="VM.Standard.A1.Flex",
                     shape_config=oci.core.models.LaunchInstanceShapeConfigDetails(
@@ -236,7 +250,7 @@ sudo reboot
                     availability_domain=self.ins_config['availability_domain'],
                     create_vnic_details=oci.core.models.CreateVnicDetails(
                         subnet_id=self.ins_config['subnet_id'],
-                        hostname_label=self.ins_config['display_name'].lower().replace(" ", "-")
+                        hostname_label=target_name.lower().replace(" ", "-")[:15] # 限制 hostname 长度防止报错
                     ),
                     source_details=oci.core.models.InstanceSourceViaImageDetails(
                         image_id=self.ins_config['image_id'],
@@ -413,6 +427,7 @@ HTML_TEMPLATE = """
             </div>
 
             <form id="instance-form" class="space-y-4">
+                <div><label class="block text-xs font-semibold text-gray-500 mb-1">实例名称 (Display Name)</label><input type="text" name="display_name" class="w-full p-2 rounded input-light text-sm" value="{{ config.instance.display_name }}"></div>
                 <div><label class="block text-xs font-semibold text-gray-500 mb-1">Availability Domain (可用区)</label><input type="text" id="inp_ad" name="availability_domain" class="w-full p-2 rounded input-light text-sm" value="{{ config.instance.availability_domain }}"></div>
                 <div><label class="block text-xs font-semibold text-gray-500 mb-1">Subnet ID (子网)</label><input type="text" id="inp_subnet" name="subnet_id" class="w-full p-2 rounded input-light text-sm" value="{{ config.instance.subnet_id }}"></div>
                 <div><label class="block text-xs font-semibold text-gray-500 mb-1">Image ID (镜像)</label><input type="text" id="inp_image" name="image_id" class="w-full p-2 rounded input-light text-sm" value="{{ config.instance.image_id }}"></div>
@@ -543,6 +558,7 @@ HTML_TEMPLATE = """
                 if(d.memory_in_gbs) document.getElementById('inp_ram').value = d.memory_in_gbs;
                 if(d.disk_size) document.getElementById('inp_disk').value = d.disk_size;
                 if(d.ssh_key) document.getElementById('inp_ssh').value = d.ssh_key;
+                if(d.display_name) document.querySelector('[name=display_name]').value = d.display_name;
                 alert("✅ main.tf 解析成功！配置已自动填充。");
             } else {
                 alert("❌ 解析失败: " + data.msg);
