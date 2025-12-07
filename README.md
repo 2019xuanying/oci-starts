@@ -1,93 +1,148 @@
-# **🐢 Oracle Cloud ARM Sniper Web Panel (Pro)**
+# **🐢 Oracle Cloud ARM Sniper Pro \- 使用说明书**
 
-这是一个基于 Python Flask 的 Oracle Cloud (甲骨文云) 自动抢机脚本，集成了现代化的 Web 控制面板。它旨在帮助用户自动申请 Oracle Cloud 紧俏的 ARM 实例（如首尔、东京等区域）。
+本文档详细介绍了如何安装依赖、获取配置参数、以及将脚本设置为后台运行和开机自启。
 
-与传统命令行脚本不同，本项目拥有**图形化界面**，支持 **main.tf 堆栈文件一键上传解析**、**在线配置参数**、**实时日志监控**、**Telegram 通知**以及智能的**防封/退避算法**。
+## **1\. 环境准备与依赖安装**
 
-## **✨ 主要功能**
+确保你的服务器是 Ubuntu 20.04+ 或 Debian 10+ 系统。
 
-* **🖥️ Web 控制面板**：无需修改代码或配置文件，直接在浏览器中管理所有操作。  
-* **📦 main.tf 自动解析**：**\[新功能\]** 支持上传甲骨文堆栈文件 (main.tf)，自动提取子网 ID、镜像 ID、可用区等复杂参数，告别手动查找。  
-* **🔑 安全登录**：内置密码验证，防止未经授权的访问（默认密码可修改）。  
-* **📋 在线配置**：支持直接粘贴 API 私钥（Private Key）内容，无需上传密钥文件，更加安全便捷。  
-* **🛡️ 智能防封 (Anti-Ban)**：  
-  * **指数退避 (Backoff)**：遇到 429 (Too Many Requests) 错误时，自动延长重试间隔。  
-  * **深度休眠 (Deep Sleep)**：连续遭遇容量不足 (Out of Host Capacity) 时，自动休眠一段时间，避免无效请求导致封号。  
-* **📊 实时监控**：面板实时展示尝试次数、当前延迟、最近一次 API 状态和详细日志。  
-* **📱 Telegram 通知**：启动、成功抢注或遇到严重错误时发送即时通知。  
-* **🚀 自动开机配置**：抢注成功后，脚本会自动配置实例的 Root 密码并开启 SSH 登录。
+### **第一步：更新系统并安装 Python3 pip**
 
-## **🛠️ 安装依赖**
+sudo apt update  
+sudo apt install python3-pip \-y
 
-请确保你的系统已安装 Python 3.6+。
+### **第二步：安装脚本依赖库**
 
-在终端执行以下命令安装所需库：
+本脚本依赖 Flask (Web框架)、OCI (甲骨文SDK) 和 Requests。
 
-pip install flask oci requests
+pip3 install flask oci requests
 
-## **🚀 快速使用指南**
+## **2\. 如何获取参数 (配置面板)**
 
-### **第一步：启动面板**
+脚本提供了 Web 面板，你需要填写两部分信息：**API 凭证** 和 **实例配置**。
 
-下载 oracle\_sniper\_web.py 到本地，在终端运行：
+### **A. 获取 API 凭证 (OCI Credentials)**
 
-python oracle\_sniper\_web.py
+这是让脚本有权限操作你账号的关键。
 
-* 默认运行在 5000 端口。  
-* 默认登录密码为 admin。（如需修改，请编辑脚本文件头部的 WEB\_PASSWORD 变量）
+1. 登录 [Oracle Cloud 控制台](https://cloud.oracle.com/)。  
+2. 点击右上角的人像图标 \-\> **My Profile (我的配置文件)**。  
+3. 在左侧菜单点击 **API Keys** \-\> **Add API Key (添加 API 密钥)**。  
+4. 选择 **Generate API Key Pair**，点击 **Download Private Key** (你会下载到一个 .pem 文件，**请保存好**)。  
+5. 点击 Add，会弹出一个配置文件预览窗口。  
+6. **填入面板的信息：**  
+   * **User OCID**: 复制预览窗口中的 user 值。  
+   * **Tenancy OCID**: 复制预览窗口中的 tenancy 值。  
+   * **Fingerprint**: 复制预览窗口中的 fingerprint 值。  
+   * **Region**: 复制预览窗口中的 region 值 (例如 ap-tokyo-1)。  
+   * **Private Key**: 用记事本打开刚才下载的 .pem 文件，**复制里面的全部内容**，粘贴到网页面板的输入框中。
 
-打开浏览器访问：http://localhost:5000 (如果是服务器部署，请使用服务器 IP)。
+### **B. 获取实例配置 (推荐使用 main.tf 自动解析)**
 
-### **第二步：配置参数 (推荐极速方案)**
+不需要手动查找 Subnet ID 和 Image ID，使用脚本的“上传 main.tf”功能最快。
 
-本脚本支持两种配置方式，强烈推荐使用 **main.tf 上传** 方式。
+1. 在 Oracle Cloud 后台，假装要去创建一个实例。  
+2. **配置你想要的机器**：  
+   * Shape 选择 **VM.Standard.A1.Flex**。  
+   * 配置好 CPU (4 OCPU) 和 内存 (24 GB)。  
+   * 选择好系统镜像 (Ubuntu 22.04 或 Oracle Linux)。  
+   * 上传你的 SSH 公钥。  
+3. **关键步骤**：不要点击 Create，而是点击底部的 **Save as Stack (另存为堆栈)**。  
+4. 下载堆栈配置（通常是一个 Zip 包），解压后找到 main.tf 文件。  
+5. **回到脚本 Web 面板**：  
+   * 点击 **"上传 main.tf"** 按钮。  
+   * 选择该文件，脚本会自动填好所有可用区、子网、镜像ID等复杂参数。
 
-#### **方式 A：⚡ 使用 main.tf 自动填充 (推荐)**
+## **3\. 开放端口与防火墙 (无法访问看这里)**
 
-这是获取准确参数（如 Image ID 和 Subnet ID）最快的方法：
+脚本默认运行在 5000 端口。你必须在两处开放防火墙。
 
-1. **登录 Oracle Cloud 后台**。  
-2. 像往常一样尝试创建一个 ARM 实例：  
-   * 选择 **VM.Standard.A1.Flex** 形状。  
-   * 选择 CPU (4核) 和 内存 (24G)。  
-   * 选择系统镜像 (Ubuntu/Oracle Linux)。  
-   * **关键点**：在页面最底部的“创建”按钮旁边，点击 **Save as Stack (另存为堆栈)**。  
-3. 在堆栈详情页面，下载堆栈配置（通常是一个 Zip 包，解压后得到 main.tf 文件）。  
-4. 回到本脚本的 Web 面板：  
-   * 在中间的 **Instance Config** 区域，点击右上角的 **紫色按钮 "Upload main.tf"**。  
-   * 选择你的 main.tf 文件。  
-5. **见证奇迹**：网页会自动填好 Availability Domain, Subnet ID, Image ID, SSH Key, CPU/RAM 等所有信息！
+### **第一处：甲骨文云后台安全组 (Security List)**
 
-#### **方式 B：手动填写**
+1. 进入云控制台 \-\> Networking (网络) \-\> Virtual Cloud Networks (虚拟云网络)。  
+2. 点击你的 VCN \-\> 点击 **Public Subnet (公共子网)**。  
+3. 点击 **Security Lists (安全列表)** \-\> Default Security List。  
+4. 添加 **Ingress Rule (入站规则)**：  
+   * Source CIDR: 0.0.0.0/0  
+   * Protocol: TCP  
+   * Destination Port Range: 5000
 
-如果你熟悉 OCI 参数，也可以直接手动填写所有输入框。
+### **第二处：服务器系统防火墙**
 
-### **第三步：填写 API 凭证 (OCI Credentials)**
+在 SSH 中执行以下命令开放端口：
 
-无论使用哪种方式配置实例，你都必须手动填写左侧的 API 认证信息：
+**如果是 Ubuntu (UFW):**
 
-1. **User OCID** & **Tenancy OCID** & **Fingerprint** & **Region**：这些信息可以在甲骨文后台 "My Profile \-\> API Keys" 中查看。  
-2. **Private Key**：  
-   * 在网页上的 "Private Key (Content)" 文本框中，**直接粘贴** 你的 \*.pem 私钥文件的**全部文本内容**。  
-   * *注意：无需上传文件到服务器，直接粘贴文本即可，重启脚本后内存释放，更安全。*
+sudo ufw allow 5000/tcp  
+sudo ufw reload
 
-### **第四步：启动抢机**
+**如果是 Oracle Linux / CentOS (Firewalld):**
 
-1. 检查所有参数无误后，点击底部的 **"SAVE CONFIGURATION"** 保存配置。  
-2. 点击右侧的 **START** 按钮。  
-3. 观察右侧 **Live Logs** 日志窗口，如果看到 "Capacity Error" 或 "429" 等日志滚动，说明脚本正在正常工作。
+sudo firewall-cmd \--permanent \--add-port=5000/tcp  
+sudo firewall-cmd \--reload
 
-## **⚙️ 高级策略说明**
+**如果是 iptables (通用):**
 
-脚本内置了智能策略，无需人工干预：
+sudo iptables \-I INPUT \-p tcp \--dport 5000 \-j ACCEPT
 
-* **遇到 429 限流**：脚本会自动增加延迟（例如从 15s \-\> 22s \-\> 33s），直到恢复正常，防止账号被封。  
-* **遇到 500 容量不足**：脚本会保持设定的基础频率重试。如果连续 2000 次（可配置）都抢不到，会进入 **深度休眠 (Deep Sleep)** 模式（默认休眠 10 分钟），避免无效请求骚扰服务器。
+## **4\. 后台运行与开机自启 (Systemd 方式)**
 
-## **⚠️ 免责声明**
+为了防止 SSH 断开后脚本停止，建议使用 Systemd 将其注册为系统服务。
 
-* 本工具仅供学习和研究使用。  
-* 作者不对使用本脚本造成的任何后果（包括但不限于账号被封禁、资源滥用等）负责。  
-* 请合理设置抢注频率，避免对 Oracle 服务造成过大压力。
+### **第一步：创建服务文件**
 
-*Happy Sniping\!* 🎯
+使用编辑器创建服务文件：
+
+sudo nano /etc/systemd/system/oracle-sniper.service
+
+### **第二步：粘贴以下内容**
+
+注意： 请根据你的实际情况修改 WorkingDirectory (脚本所在目录) 和 ExecStart (脚本全路径)。  
+假设你的脚本放在 /root/oracle\_sniper\_web.py：  
+\[Unit\]  
+Description=Oracle Cloud Sniper Web Panel  
+After=network.target
+
+\[Service\]  
+\# 运行用户，通常是 root  
+User=root  
+\# 脚本所在的文件夹路径  
+WorkingDirectory=/root  
+\# python3 的路径 和 脚本的全路径  
+ExecStart=/usr/bin/python3 /root/oracle\_sniper\_web.py  
+\# 崩溃后自动重启  
+Restart=always  
+\# 输出日志到系统日志  
+StandardOutput=syslog  
+StandardError=syslog
+
+\[Install\]  
+WantedBy=multi-user.target
+
+*(按 Ctrl+O 保存，按 Ctrl+X 退出)*
+
+### **第三步：启动服务并设置开机自启**
+
+\# 重载系统服务配置  
+sudo systemctl daemon-reload
+
+\# 启动面板  
+sudo systemctl start oracle-sniper
+
+\# 设置开机自启  
+sudo systemctl enable oracle-sniper
+
+### **管理命令**
+
+* **查看运行状态**: sudo systemctl status oracle-sniper  
+* **停止服务**: sudo systemctl stop oracle-sniper  
+* **重启服务**: sudo systemctl restart oracle-sniper
+
+## **5\. 访问面板**
+
+完成以上步骤后，即可通过浏览器访问：
+
+* **地址**: http://\<你的服务器公网IP\>:5000  
+* **默认密码**: admin (请在脚本开头的 WEB\_PASSWORD 变量处修改)
+
+祝你好运！🎯
