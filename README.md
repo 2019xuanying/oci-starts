@@ -89,16 +89,11 @@ sudo iptables \-I INPUT \-p tcp \--dport 5000 \-j ACCEPT
 
 为了防止 SSH 断开后脚本停止，建议使用 Systemd 将其注册为系统服务。
 
-### **第一步：创建服务文件**
+### **一键创建服务文件**
 
-使用编辑器创建服务文件：
+**请直接复制并运行以下整段命令**，这会自动创建正确的服务文件（避免手动编辑时的格式错误）：
 
-sudo nano /etc/systemd/system/oracle-sniper.service
-
-### **第二步：粘贴以下内容**
-
-注意： 请根据你的实际情况修改 WorkingDirectory (脚本所在目录) 和 ExecStart (脚本全路径)。  
-假设你的脚本放在 /root/oracle\_sniper\_web.py：  
+sudo bash \-c 'cat \> /etc/systemd/system/oracle-sniper.service \<\<EOF  
 \[Unit\]  
 Description=Oracle Cloud Sniper Web Panel  
 After=network.target
@@ -117,11 +112,12 @@ StandardOutput=syslog
 StandardError=syslog
 
 \[Install\]  
-WantedBy=multi-user.target
+WantedBy=multi-user.target  
+EOF'
 
-*(按 Ctrl+O 保存，按 Ctrl+X 退出)*
+### **启动服务并设置开机自启**
 
-### **第三步：启动服务并设置开机自启**
+运行完上面的命令后，执行以下命令来启动：
 
 \# 重载系统服务配置  
 sudo systemctl daemon-reload
