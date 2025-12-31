@@ -1,4 +1,4 @@
-# **🐢 Oracle Cloud ARM Sniper Pro \- 使用说明书**
+# **🐢 Oracle Cloud ARM 抢机助手 \- 使用说明书**
 
 本文档详细介绍了如何安装依赖、获取配置参数、以及将脚本设置为后台运行和开机自启。
 
